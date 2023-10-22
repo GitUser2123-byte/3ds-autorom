@@ -33,3 +33,7 @@ python archive.py
 Comment and issues with the actual script to Github
 
 The archive.org directory is limited however, you can request roms in the comments of the directory (don't overflow the comments with request make sure that someone requested that rom and wait i don't live in the US and archive.org upload speeds are limited outside of the US)
+
+Join the Discord and drop a dm if you need help or come to say hi:
+
+https://discord.gg/6Q7p7b7N6M
