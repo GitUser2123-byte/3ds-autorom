@@ -9,6 +9,7 @@ This is the archive.org repository
 ## Authors
 
 ChatGPT (did code corrections)
+
 Me
 
 ## Installation
@@ -25,7 +26,7 @@ to run the script sucsessfully cd into cloned folder and run:
 Note: This only works on Windows for now, but i am working on making it compatible with Linux soon (gimme like a month)
 
 then run 
-pyhton archive.py
+python archive.py
 ## Support
 
 Comment and issues with the actual script to Github
