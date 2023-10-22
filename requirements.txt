@@ -1,0 +1,4 @@
+requests==2.26.0
+pySmartDL==1.3.4
+rarfile==4.0
+psutil==5.8.0
