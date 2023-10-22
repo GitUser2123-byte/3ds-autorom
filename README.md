@@ -3,7 +3,8 @@
 
 This Python script will run and download from an archive.org directory to auto move to an sd card for our convenience. 
 
-This is the archive.org repository
+This is the archive.org repository:
+https://archive.org/details/3dscia_202310
 
 
 ## Authors
