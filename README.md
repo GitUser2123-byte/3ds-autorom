@@ -1,6 +1,8 @@
 
 3DS Auto CIA Downloader
 
+##LINUX support coming soon
+
 This Python script will run and download from an archive.org directory to auto move to an sd card for our convenience. 
 
 This is the archive.org repository:
@@ -15,7 +17,7 @@ Green_Basket12
 
 ## Installation
 
-Install the script by using git clone (On windows)
+TO BE MADE
 
 Requirements:
 Pyhton 3.8
