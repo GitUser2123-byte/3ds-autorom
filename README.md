@@ -1,7 +1,7 @@
 
 3DS Auto CIA Downloader
 
-## Linux Support is out
+Linux Support is out
 
 This Python script will run and download from an archive.org directory to auto move to an sd card for our convenience. 
 
