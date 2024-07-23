@@ -8,9 +8,11 @@ from rarfile import RarFile
 import zipfile
 import shutil
 import psutil
+import ssl
+import urllib.request
 
 ARCHIVE_IDENTIFIER = '3dscia_202310'
-DESTINATION_PATH = os.path.join(os.getcwd(), 'output')  # Set the destination path to a subfolder called 'output'
+DESTINATION_PATH = os.path.join(os.getcwd(), 'output')
 EXCLUDE_FILES = ['3dscia_202310_archive.torrent', '3dscia_202310_files.xml', '3dscia_202310_meta.sqlite', '3dscia_202310_meta.xml']
 
 def ensure_directory_exists(directory):
@@ -32,7 +34,11 @@ def download_file(item_id, file_name, destination):
 
     output_path = os.path.join(destination, file_name)
 
-    obj = SmartDL(url, output_path)
+    context = ssl._create_unverified_context()
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
+    urllib.request.install_opener(opener)
+
+    obj = SmartDL(url, output_path, threads=4)
     obj.start(blocking=False)
 
     obj.wait()
@@ -40,7 +46,6 @@ def download_file(item_id, file_name, destination):
     if obj.isSuccessful():
         print(f"Download of {file_name} complete!")
 
-        # Create a directory for the extracted files
         extracted_folder_path = os.path.join(destination, os.path.splitext(file_name)[0])
         ensure_directory_exists(extracted_folder_path)
 
@@ -50,7 +55,6 @@ def download_file(item_id, file_name, destination):
             extract_zip(output_path, extracted_folder_path)
         print(f"Extraction of {file_name} complete!")
 
-        # Return the path of the extracted folder
         return extracted_folder_path
     else:
         print(f"Error during download: {obj.get_errors()}")
@@ -59,64 +63,68 @@ def download_file(item_id, file_name, destination):
 def delete_original_file(file_path):
     os.remove(file_path)
 
-def move_to_usb(output_path, usb_device, destination_folder='', supported_extensions={'cia': '.cia', 'nds': '.nds'}):
-    # Create the 'cia' and 'nds' folders on the root of the USB device
-    destination_cia_path = os.path.join(usb_device, 'cia')
-    destination_nds_path = os.path.join(usb_device, 'nds')
-    ensure_directory_exists(destination_cia_path)
-    ensure_directory_exists(destination_nds_path)
+def move_to_usb(output_path, usb_device):
+    for root, dirs, files in os.walk(output_path):
+        for file in files:
+            if file.lower().endswith('.cia'):
+                target_dir = os.path.join(usb_device, 'cia')
+            elif file.lower().endswith('.nds'):
+                target_dir = os.path.join(usb_device, 'nds')
+            else:
+                continue
 
-    if os.path.exists(output_path) and os.path.isdir(output_path):
-        for file_name in os.listdir(output_path):
-            base_name, file_extension = os.path.splitext(file_name)
-            for folder_name, extension in supported_extensions.items():
-                if file_extension.lower() == extension:
-                    source_file_path = os.path.join(output_path, file_name)
-                    destination_folder_path = os.path.join(usb_device, folder_name)
-                    destination_file_path = os.path.join(destination_folder_path, file_name)
-                    ensure_directory_exists(destination_folder_path)
-                    shutil.move(source_file_path, destination_file_path)
-        print(f"\nFiles moved to USB device: {usb_device}")
-    else:
-        print(f"Error: The path {output_path} does not exist or is not a directory.")
-
+            ensure_directory_exists(target_dir)
+            shutil.move(os.path.join(root, file), os.path.join(target_dir, file))
+            print(f"Moved {file} to {target_dir}")
 
 def list_connected_usb_devices():
     usb_devices = []
-    for partition in psutil.disk_partitions():
-        if 'removable' in partition.opts:
-            usb_devices.append(partition.mountpoint)
+    if platform.system() == 'Windows':
+        for partition in psutil.disk_partitions():
+            if 'removable' in partition.opts:
+                usb_devices.append(partition.device)
+    elif platform.system() == 'Linux':
+        result = subprocess.run(['lsblk', '-o', 'NAME,MOUNTPOINT'], capture_output=True, text=True)
+        for line in result.stdout.splitlines():
+            if '/media' in line:
+                usb_devices.append(line.split()[0])
     return usb_devices
 
-def get_file_list(item_id):
-    url = f'https://archive.org/metadata/{item_id}'
-    response = requests.get(url)
+def get_file_list():
+    response = requests.get(f'https://archive.org/download/{ARCHIVE_IDENTIFIER}/{ARCHIVE_IDENTIFIER}_files.xml')
+    file_list = []
     if response.status_code == 200:
-        metadata = response.json()
-        files = [file['name'] for file in metadata['files'] if file['name'] not in EXCLUDE_FILES]
-        return files
+        from xml.etree import ElementTree as ET
+        root = ET.fromstring(response.content)
+        for file_elem in root.findall(".//file"):
+            file_name = file_elem.get("name")
+            if file_name and file_name.endswith(('.rar', '.zip')) and file_name not in EXCLUDE_FILES:
+                file_list.append(file_name)
     else:
-        print(f"Failed to retrieve file list from {url}. Status code: {response.status_code}")
-        return []
+        print(f"Failed to retrieve file list. Status code: {response.status_code}")
+    return file_list
 
 def main():
-    file_list = get_file_list(ARCHIVE_IDENTIFIER)
+    file_list = get_file_list()
+
+    if not file_list:
+        print("No .rar or .zip files found.")
+        return
+
     current_index = 0
-    visible_range = (0, min(10, len(file_list)))
+    visible_range = (0, min(len(file_list), 10))
 
     while True:
-        os.system('cls' if os.name == 'nt' else 'clear')
-
-        print("Archive Downloader")
-        print("-------------------")
-        print(f"\nCurrent Directory: {DESTINATION_PATH}\n")
-
+        os.system('cls' if platform.system() == 'Windows' else 'clear')
+        print("3DS Archive Downloader")
+        print("======================")
         for i, file_name in enumerate(file_list[visible_range[0]:visible_range[1]]):
-            marker = '*' if i + visible_range[0] == current_index else ' '
-            print(f"{marker} {i + visible_range[0] + 1}. {file_name}")
+            prefix = '>' if i + visible_range[0] == current_index else ' '
+            print(f"{prefix} {file_name}")
 
-        print("\nUse Arrow keys to navigate, 'Enter' to download, 'Q' to quit")
+        print("\nUse arrow keys to navigate, Enter to select, q to quit.")
 
+        key = ''
         if platform.system() == 'Windows':
             key = msvcrt.getch().decode('utf-8', errors='ignore')
         else:
@@ -137,23 +145,23 @@ def main():
             file_destination = os.path.join(DESTINATION_PATH, file_name)
             extracted_folder_path = download_file(ARCHIVE_IDENTIFIER, file_name, DESTINATION_PATH)
 
-            delete_original_file(file_destination)
+            if extracted_folder_path:
+                delete_original_file(file_destination)
 
-            usb_devices = list_connected_usb_devices()
-            if usb_devices:
-                print("\nConnected USB Devices:")
-                for i, device in enumerate(usb_devices):
-                    print(f"{i + 1}. {device}")
+                usb_devices = list_connected_usb_devices()
+                if usb_devices:
+                    print("\nConnected USB Devices:")
+                    for i, device in enumerate(usb_devices):
+                        print(f"{i + 1}. {device}")
 
-                selected_device_index = int(input("Select a USB device (enter the corresponding number): ")) - 1
-                selected_usb_device = usb_devices[selected_device_index]
+                    selected_device_index = int(input("Select a USB device (enter the corresponding number): ")) - 1
+                    selected_usb_device = usb_devices[selected_device_index]
 
-                move_to_usb(extracted_folder_path, selected_usb_device)
-            else:
-                print("\nNo connected USB devices found.")
+                    move_to_usb(extracted_folder_path, selected_usb_device)
+                else:
+                    print("\nNo connected USB devices found.")
 
-            input("\nPress Enter to continue.")
-
+                input("\nPress Enter to continue.")
         elif key == 'H':
             current_index = (current_index - 1) % len(file_list)
             if current_index < visible_range[0]:
